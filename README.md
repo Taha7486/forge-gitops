@@ -37,8 +37,12 @@ The release name must stay `argocd`: `apps/argocd.yaml` uses the same name so Ar
 
 Look at it: `kubectl -n argocd port-forward svc/argocd-server 8080:443`, then open `https://localhost:8080` (self-signed certificate). No load balancer, no ingress.
 
-Prove GitOps: change `PODINFO_UI_MESSAGE` in `workloads/podinfo/deployment.yaml`, push, and wait. ArgoCD checks Git about every 3 minutes (default 120 s plus up to 60 s jitter).
+Prove GitOps: change `PODINFO_UI_MESSAGE` in `workloads/podinfo/deployment.yaml`, push, and wait. ArgoCD polls Git on a timer (default 120 s plus up to 60 s jitter), so the wait depends on where in that cycle the push lands. Measured on kind: 211 s and 35 s.
+
+After the bootstrap, change Git, never the cluster: `helm list` still shows the release at revision 1 because ArgoCD took it over without a Helm upgrade, so a manual `helm upgrade` would fight ArgoCD.
 
 ## Status
 
-Not run on any cluster yet. Checked offline: the ArgoCD chart renders with `argocd/values.yaml` (`helm template`, no Dex or notifications), the chart keys exist at the pinned version, podinfo's port, probes and `PODINFO_UI_MESSAGE` match its own chart at 6.15.0, and the Application fields follow the Argo CD docs. Not proven: that ArgoCD cleanly adopts the release installed by hand and then manages itself, the resource requests (estimates, to be tuned from measured usage), and the sync of podinfo.
+Tested on a local kind cluster (Kubernetes 1.35.8, one node) on 2026-10-13, following the bootstrap above: ArgoCD installed by hand with Helm, then `root-app.yaml` applied. Result: `root`, `argocd` and `podinfo` were all Synced and Healthy within 60 s, no ArgoCD pod restarted, and the `argocd` app manages 43 resources of its own release. The chart's `redis-secret-init` hook job ran a second time when ArgoCD synced (it completed, nothing restarted). Changing the message in Git reached the running pod without any `kubectl` (211 s), and the revert did too (35 s). Idle memory of ArgoCD was about 244 MB in total against 640 Mi requested (one snapshot).
+
+Not proven: anything on EKS (node sizes, IRSA, ECR pulls), ArgoCD's behaviour under load, and a Git change made by a different workflow than a manual push.
