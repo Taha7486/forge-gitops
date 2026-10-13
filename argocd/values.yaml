@@ -1,0 +1,38 @@
+# Values for the argo-cd chart 10.10.3 (Argo CD v3.5.5). Used twice: by the first
+# helm install by hand, and by apps/argocd.yaml. Keys checked against the chart's
+# own values.yaml at that tag. Sized for two small nodes.
+
+# Not used: no SSO, no notifications. Both are on by default in the chart.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+
+# Requests only, so the scheduler counts them and nothing is capped too low.
+# The numbers are estimates, not measurements: the Phase 1 exit check records the
+# real usage and these get tuned then.
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+server:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+applicationSet:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
