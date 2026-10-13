@@ -25,7 +25,7 @@ spec:
               containerPort: 9898
           env:
             - name: PODINFO_UI_MESSAGE
-              value: "Forge: changed in Git"
+              value: "Forge: hello from Git"
           livenessProbe:
             httpGet:
               path: /healthz
