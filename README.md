@@ -15,9 +15,10 @@ The only things done by hand are the first install of ArgoCD and the root app, b
 | Path | What it is |
 | --- | --- |
 | `bootstrap/root-app.yaml` | The one object applied by hand. Watches `apps/`. |
-| `apps/` | One ArgoCD Application per file: `argocd.yaml` (ArgoCD managing itself) and `podinfo.yaml`. |
+| `apps/` | One ArgoCD Application per file: `argocd.yaml` (ArgoCD managing itself), `podinfo.yaml`, `csi-secrets-aws.yaml` (Secrets Store CSI driver and AWS provider, wave 0) and `identity-demo.yaml` (wave 1). |
 | `argocd/values.yaml` | Values for the ArgoCD chart. Used by the first install and by `apps/argocd.yaml`. |
 | `workloads/podinfo/` | podinfo's Deployment and Service (upstream image for now; Phase 2 switches to the image our pipeline builds and signs). |
+| `workloads/identity-demo/` | Plan 1.7: a service account tied to an IAM role, a `SecretProviderClass` and a pod that prints one Parameter Store secret. `ACCOUNT_ID` in `serviceaccount.yaml` is a placeholder until the AWS account exists; an account ID is not a secret (AWS docs), so the real one may be committed here. |
 | `PARKED.md` | Ideas parked by the scope tripwires. Read it after Phase 2 ships. |
 
 ## Pins
