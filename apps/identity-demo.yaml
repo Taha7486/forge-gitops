@@ -1,0 +1,26 @@
+# The identity demo (plan 1.7): one pod reads one Parameter Store secret. Wave 1: it
+# uses the SecretProviderClass kind that csi-secrets-aws (wave 0) installs.
+# SkipDryRunOnMissingResource is a second guard if ArgoCD checks it too early.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: identity-demo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Taha7486/forge-gitops.git
+    targetRevision: main
+    path: workloads/identity-demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: identity-demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
