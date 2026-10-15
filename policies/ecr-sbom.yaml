@@ -1,0 +1,44 @@
+# Image policy 2 of 3 (ADR-002, decision 2): a signed CycloneDX SBOM attestation exists.
+# Ported from the spike's r3c-split-sbom.yaml to ECR. ACCOUNT_ID is a placeholder, see
+# ecr-signature.yaml.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: forge-ecr-sbom
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 30
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  credentials:
+    providers:
+      - amazon
+  matchImageReferences:
+    - glob: "ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/*"
+  attestors:
+    - name: forgeci
+      cosign:
+        keyless:
+          identities:
+            - subject: "https://github.com/Taha7486/forge-factory/.github/workflows/sign-attest.yml@refs/heads/main"
+              issuer: "https://token.actions.githubusercontent.com"
+  attestations:
+    - name: sbom
+      intoto:
+        type: "https://cyclonedx.org/bom"
+  variables:
+    - name: sbomfail
+      expression: >-
+        images.containers.filter(i,
+          !(verifyAttestationSignatures(i, attestations.sbom, [attestors.forgeci]) > 0 &&
+            extractPayload(i, attestations.sbom).predicate.bomFormat == 'CycloneDX'))
+  validations:
+    - expression: variables.sbomfail.size() == 0
+      messageExpression: >-
+        'missing or invalid CycloneDX SBOM attestation for: ' + variables.sbomfail.join(', ')

@@ -1,0 +1,53 @@
+# Image policy 3 of 3 (ADR-002, decision 2): a signed vulnerability-scan attestation exists
+# and is fresh. Ported from the spike's r3c-split-vuln.yaml to ECR. ACCOUNT_ID is a
+# placeholder, see ecr-signature.yaml.
+# Freshness window: 720h (30 days), chosen 2026-10-16 so a rarely rebuilt image does not
+# go stale between sessions. ADR-001 used 168h. If you change it, change the message too.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: forge-ecr-vuln
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 30
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  credentials:
+    providers:
+      - amazon
+  matchImageReferences:
+    - glob: "ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/*"
+  attestors:
+    - name: forgeci
+      cosign:
+        keyless:
+          identities:
+            - subject: "https://github.com/Taha7486/forge-factory/.github/workflows/sign-attest.yml@refs/heads/main"
+              issuer: "https://token.actions.githubusercontent.com"
+  attestations:
+    - name: vuln
+      intoto:
+        type: "https://cosign.sigstore.dev/attestation/vuln/v1"
+  variables:
+    - name: vulnunverified
+      expression: >-
+        images.containers.filter(i,
+          verifyAttestationSignatures(i, attestations.vuln, [attestors.forgeci]) == 0)
+    - name: vulnstale
+      expression: >-
+        images.containers.filter(i,
+          !(i in variables.vulnunverified) &&
+          !(timestamp(extractPayload(i, attestations.vuln).predicate.metadata.scanFinishedOn) > time.now() - duration('720h')))
+  validations:
+    - expression: variables.vulnunverified.size() == 0
+      messageExpression: >-
+        'missing or unverified vulnerability attestation for: ' + variables.vulnunverified.join(', ')
+    - expression: variables.vulnstale.size() == 0
+      messageExpression: >-
+        'stale vulnerability attestation (scanFinishedOn older than 720h) for: ' + variables.vulnstale.join(', ')

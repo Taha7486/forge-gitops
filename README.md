@@ -19,6 +19,8 @@ The only things done by hand are the first install of ArgoCD and the root app, b
 | `argocd/values.yaml` | Values for the ArgoCD chart. Used by the first install and by `apps/argocd.yaml`. |
 | `workloads/podinfo/` | podinfo's Deployment and Service (upstream image for now; Phase 2 switches to the image our pipeline builds and signs). |
 | `workloads/identity-demo/` | Plan 1.7: a service account tied to an IAM role, a `SecretProviderClass` and a pod that prints one Parameter Store secret. `ACCOUNT_ID` in `serviceaccount.yaml` is a placeholder until the AWS account exists; an account ID is not a secret (AWS docs), so the real one may be committed here. |
+| `policies/` | R2: three Kyverno `ImageValidatingPolicy` files for our ECR images (`ecr-signature.yaml`, `ecr-sbom.yaml`, `ecr-vuln.yaml`, 720h scan window). `ACCOUNT_ID` is a placeholder until the account exists. Delivered by `apps/policies.yaml` (wave 1, after Kyverno). Accepted by Kyverno 1.19.1 on kind; nothing past that is proven. |
+| `kyverno/values.yaml` | R2: values for the Kyverno chart 3.9.1 (v1.19.1): ADR-002 sizes, two admission replicas, hard spreading. The IRSA annotation is commented out on purpose: R2 step 3 runs without it, step 4 adds it in a second commit. Used by `apps/kyverno.yaml` (wave 0). WRITTEN, NOT yet tested in ArgoCD. |
 | `PARKED.md` | Ideas parked by the scope tripwires. Read it after Phase 2 ships. |
 
 ## Pins

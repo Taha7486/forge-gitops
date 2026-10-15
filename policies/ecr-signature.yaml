@@ -1,0 +1,41 @@
+# Image policy 1 of 3 (ADR-002, decision 2): the image carries a valid keyless signature
+# from our signing workflow. Ported from the spike's r3c-split-sig.yaml to ECR.
+# ACCOUNT_ID is a placeholder until the AWS account exists (the ID is not a secret, so the
+# real one may be committed in this repo). Not watched by the root app yet: how the files
+# reach the cluster is settled with the Kyverno install (R2 readiness review, item 3).
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: forge-ecr-signature
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 30
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  # Ambient AWS credentials: the admission controller's IRSA role (R2 steps 3 and 4).
+  credentials:
+    providers:
+      - amazon
+  matchImageReferences:
+    - glob: "ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/*"
+  attestors:
+    - name: forgeci
+      cosign:
+        keyless:
+          identities:
+            - subject: "https://github.com/Taha7486/forge-factory/.github/workflows/sign-attest.yml@refs/heads/main"
+              issuer: "https://token.actions.githubusercontent.com"
+  variables:
+    - name: sigfail
+      expression: >-
+        images.containers.filter(i, verifyImageSignatures(i, [attestors.forgeci]) == 0)
+  validations:
+    - expression: variables.sigfail.size() == 0
+      messageExpression: >-
+        'no valid signature from the forge-factory signing workflow for: ' + variables.sigfail.join(', ')

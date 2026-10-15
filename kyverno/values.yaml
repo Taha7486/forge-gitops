@@ -1,0 +1,46 @@
+# Values for the kyverno chart 3.9.1 (Kyverno v1.19.1, ADR-001 pin). ADR-002 decisions 4
+# and 5 plus Addendum 1 (A1), copied from the spike's r3/tools/r3e-kyverno-values.yaml,
+# which was measured on kind. Sizes are STARTING values; the Phase 1 exit check records
+# the real usage on EKS.
+admissionController:
+  replicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  # Hard spreading: one replica per node (the chart's own anti-affinity is only a preference).
+  # nodeTaintsPolicy: Honor is what keeps rolling updates from stalling with two nodes (A1).
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      nodeTaintsPolicy: Honor
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: admission-controller
+          app.kubernetes.io/instance: kyverno
+  container:
+    resources:
+      requests: {cpu: 250m, memory: 256Mi}
+      limits: {memory: 512Mi}
+  # R2 step 3 runs WITHOUT this block (Kyverno with no IAM role of its own: record whether
+  # it is denied or borrows the node's role). R2 step 4 adds it, in a second commit.
+  # The role is made by forge-infra/ephemeral/irsa_kyverno.tf (output kyverno_role_arn);
+  # ACCOUNT_ID is a placeholder until the account exists. The trust rule only accepts the
+  # service account kyverno/kyverno-admission-controller, so the release name must stay
+  # "kyverno" (apps/kyverno.yaml).
+  # rbac:
+  #   serviceAccount:
+  #     annotations:
+  #       eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/forge-kyverno-admission
+reportsController:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+backgroundController:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+cleanupController:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
