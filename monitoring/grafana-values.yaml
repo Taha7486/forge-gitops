@@ -1,4 +1,4 @@
-# Grafana (chart 10.5.15 = Grafana 12.3.1). Dashboards and the two alert rules come from
+# Grafana (community chart 13.2.6 = Grafana 13.2.2). Dashboards and the two alert rules come from
 # ConfigMaps and values in Git; nothing is clicked together in the UI. No sidecar, so no
 # Kubernetes API access and no service account token (CIS 5.1.6). No PVC (rules file,
 # item 17): an emptyDir, so anything made in the UI is lost on restart, on purpose. No
