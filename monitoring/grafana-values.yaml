@@ -17,13 +17,16 @@ persistence:
 resources:
   requests: {cpu: 50m, memory: 128Mi}
   limits: {memory: 256Mi}
-# Grafana runs its database migrations at every start (the database is an emptyDir). That
-# took about 2 minutes on the laptop's disk and tripped the liveness probe twice (the pod
-# restarted). The startup probe gives it up to 5 minutes before liveness starts.
+# Grafana runs its database migrations at every start (the database is an emptyDir). On the
+# laptop's disk that took about 2 minutes on a quiet kind cluster and about 5 minutes on a busy
+# one (ArgoCD, Kyverno, Prometheus and two Grafana pods at load average 5.6): at 5 minutes the
+# startup probe killed the pod twice; the second time the last migration had finished 14 s
+# earlier, before the server answered. The startup probe now gives it up to 10 minutes before
+# liveness starts. Measured on kind 2026-10-16; EKS untested.
 startupProbe:
   httpGet: {path: /api/health, port: grafana}
   periodSeconds: 10
-  failureThreshold: 30
+  failureThreshold: 60
 grafana.ini:
   analytics:
     check_for_updates: false
