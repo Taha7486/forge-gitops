@@ -10,6 +10,10 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # Without this the app stays OutOfSync for ever: 11 Kyverno CRDs (group policies.kyverno.io)
+    # differ from the chart only by the `spec.conversion: {strategy: None}` default the API
+    # server adds. Kyverno's docs recommend this setting; tested on kind 2026-10-16.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
 spec:
   project: default
   sources:
