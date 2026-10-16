@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fail-deployment
+  namespace: pt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fail-deployment
+  template:
+    metadata:
+      labels:
+        app: fail-deployment
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: app
+        image: ghcr.io/stefanprodan/podinfo:6.15.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: h
+        hostPath:
+          path: /etc

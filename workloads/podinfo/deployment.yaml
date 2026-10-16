@@ -17,6 +17,12 @@ spec:
       labels:
         app: podinfo
     spec:
+      # The CIS/PSS policies in policies/ require these. The image's user "app" is not
+      # numeric, so runAsNonRoot needs runAsUser: 100 (its uid) or the kubelet refuses to start it.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
       containers:
         - name: podinfo
           image: ghcr.io/stefanprodan/podinfo:6.15.0@sha256:ec73780a8425f59ea49f5bc8cdff0d598805a224fbaa1f86c67a244f250fa9da

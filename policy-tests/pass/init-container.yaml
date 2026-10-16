@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-init-container
+  namespace: pt
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: ghcr.io/stefanprodan/podinfo:6.15.0
+    securityContext: &id001
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+  initContainers:
+  - name: setup
+    image: ghcr.io/stefanprodan/podinfo:6.15.0
+    securityContext: *id001

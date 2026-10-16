@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fail-deployment-annotation
+  namespace: pt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fail-deployment-annotation
+  template:
+    metadata:
+      labels:
+        app: fail-deployment-annotation
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/app: unconfined
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: app
+        image: ghcr.io/stefanprodan/podinfo:6.15.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL

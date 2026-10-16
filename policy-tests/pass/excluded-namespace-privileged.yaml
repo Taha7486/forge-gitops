@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-excluded-namespace-privileged
+  namespace: kube-system
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: ghcr.io/stefanprodan/podinfo:6.15.0
+    securityContext:
+      allowPrivilegeEscalation: true
+      capabilities:
+        drop:
+        - ALL
+      privileged: true

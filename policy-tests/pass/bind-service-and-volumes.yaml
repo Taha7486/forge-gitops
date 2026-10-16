@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-bind-service-and-volumes
+  namespace: pt
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: app
+    image: ghcr.io/stefanprodan/podinfo:6.15.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+        add:
+        - NET_BIND_SERVICE
+    volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: cm
+    configMap:
+      name: x
+  - name: tmp
+    emptyDir: {}
+  - name: pj
+    projected:
+      sources:
+      - serviceAccountToken:
+          path: t
+          expirationSeconds: 3600
+  - name: csi
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: x

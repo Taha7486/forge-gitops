@@ -1,5 +1,5 @@
-# The three image policies for our ECR images (policies/). Wave 1: they use the
-# ImageValidatingPolicy kind that apps/kyverno.yaml (wave 0) installs.
+# The Kyverno policies (policies/): three image policies for our ECR images and 17 CIS/PSS
+# pod security policies. Wave 1: they use the kinds that apps/kyverno.yaml (wave 0) installs.
 # SkipDryRunOnMissingResource is a second guard if ArgoCD checks it too early.
 # The policies are cluster-scoped; the namespace below is only a placeholder for ArgoCD.
 apiVersion: argoproj.io/v1alpha1

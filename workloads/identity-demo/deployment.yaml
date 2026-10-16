@@ -18,6 +18,9 @@ spec:
         app: secret-reader
     spec:
       serviceAccountName: secret-reader
+      # Required by the CIS policy forge-cis-sa-token. Not needed for the demo: the IRSA token
+      # is projected by the EKS webhook and the CSI driver asks for its own. UNVERIFIED until EKS.
+      automountServiceAccountToken: false
       containers:
         - name: reader
           image: public.ecr.aws/docker/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e

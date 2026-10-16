@@ -1,0 +1,47 @@
+# Pod security policy 8 of 17 (PSS Baseline, no CIS control).
+# Only the safe sysctl subset from the PSS page (Kubernetes 1.35).
+# Matches Pod creation; Deployments, StatefulSets, DaemonSets, Jobs and CronJobs through
+# autogen. Ephemeral containers are not covered (see README). Namespaces kube-system,
+# kube-node-lease, kube-public, kyverno and argocd are excluded.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: forge-pss-sysctls
+  annotations:
+    forge.dev/controls: "PSS baseline: Sysctls (no CIS control)"
+    policies.kyverno.io/title: Restrict sysctls to the safe set
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/severity: medium
+spec:
+  validationActions: [Deny, Audit]
+  failurePolicy: Fail
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  variables:
+    - name: allowed
+      expression: >-
+        ['kernel.shm_rmid_forced', 'net.ipv4.ip_local_port_range',
+        'net.ipv4.ip_unprivileged_port_start', 'net.ipv4.tcp_syncookies',
+        'net.ipv4.ping_group_range', 'net.ipv4.ip_local_reserved_ports',
+        'net.ipv4.tcp_keepalive_time', 'net.ipv4.tcp_fin_timeout',
+        'net.ipv4.tcp_keepalive_intvl', 'net.ipv4.tcp_keepalive_probes']
+    - name: offenders
+      expression: >-
+        object.spec.?securityContext.?sysctls.orValue([]).filter(s, !(s.name in
+        variables.allowed)).map(s, s.name)
+  validations:
+    - expression: variables.offenders.size() == 0
+      messageExpression: >-
+        'this sysctl is not allowed (PSS baseline): ' + variables.offenders.join(', ')

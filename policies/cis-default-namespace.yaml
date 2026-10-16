@@ -1,0 +1,35 @@
+# Pod security policy 15 of 17 (CIS only, CIS 5.7.4).
+# No workloads in the default namespace. Uses namespaceObject, which autogen does not rewrite.
+# Matches Pod creation; Deployments, StatefulSets, DaemonSets, Jobs and CronJobs through
+# autogen. Ephemeral containers are not covered (see README). Namespaces kube-system,
+# kube-node-lease, kube-public, kyverno and argocd are excluded.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: forge-cis-default-namespace
+  annotations:
+    forge.dev/controls: "CIS 5.7.4"
+    policies.kyverno.io/title: Do not use the default namespace
+    policies.kyverno.io/category: CIS Kubernetes Benchmark
+    policies.kyverno.io/severity: low
+spec:
+  validationActions: [Deny, Audit]
+  failurePolicy: Fail
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  validations:
+    - expression: namespaceObject.metadata.name != 'default'
+      messageExpression: >-
+        'workloads must not run in the default namespace (CIS 5.7.4)'

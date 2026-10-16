@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-pod-user
+  namespace: pt
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+    seLinuxOptions:
+      user: system_u
+  containers:
+  - name: app
+    image: ghcr.io/stefanprodan/podinfo:6.15.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL

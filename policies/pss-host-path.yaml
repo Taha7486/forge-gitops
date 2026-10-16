@@ -1,0 +1,40 @@
+# Pod security policy 4 of 17 (PSS Baseline, CIS 5.2.12).
+# No hostPath volumes.
+# Matches Pod creation; Deployments, StatefulSets, DaemonSets, Jobs and CronJobs through
+# autogen. Ephemeral containers are not covered (see README). Namespaces kube-system,
+# kube-node-lease, kube-public, kyverno and argocd are excluded.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: forge-pss-host-path
+  annotations:
+    forge.dev/controls: "CIS 5.2.12; PSS baseline: HostPath Volumes"
+    policies.kyverno.io/title: Disallow hostPath volumes
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/severity: high
+spec:
+  validationActions: [Deny, Audit]
+  failurePolicy: Fail
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  variables:
+    - name: offenders
+      expression: >-
+        object.spec.?volumes.orValue([]).filter(v, has(v.hostPath)).map(v, v.name)
+  validations:
+    - expression: variables.offenders.size() == 0
+      messageExpression: >-
+        'hostPath volumes are not allowed (CIS 5.2.12, PSS baseline): ' +
+        variables.offenders.join(', ')

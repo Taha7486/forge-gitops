@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fail-cronjob
+  namespace: pt
+spec:
+  schedule: 0 0 * * *
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: app
+            image: ghcr.io/stefanprodan/podinfo:6.15.0
+            securityContext:
+              capabilities:
+                drop:
+                - ALL
+              privileged: true
+          restartPolicy: Never
