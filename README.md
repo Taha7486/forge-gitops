@@ -15,12 +15,13 @@ The only things done by hand are the first install of ArgoCD and the root app, b
 | Path | What it is |
 | --- | --- |
 | `bootstrap/root-app.yaml` | The one object applied by hand. Watches `apps/`. |
-| `apps/` | One ArgoCD Application per file: `argocd.yaml` (ArgoCD managing itself), `podinfo.yaml`, `csi-secrets-aws.yaml` (Secrets Store CSI driver and AWS provider, wave 0) and `identity-demo.yaml` (wave 1). |
+| `apps/` | One ArgoCD Application per file: `argocd.yaml` (ArgoCD managing itself), `podinfo.yaml`, `csi-secrets-aws.yaml` (Secrets Store CSI driver and AWS provider, wave 0), `identity-demo.yaml` (wave 1), and the monitoring apps (`policy-reporter.yaml`, `prometheus.yaml`, `monitoring-config.yaml`, `grafana.yaml`). |
 | `argocd/values.yaml` | Values for the ArgoCD chart. Used by the first install and by `apps/argocd.yaml`. |
 | `workloads/podinfo/` | podinfo's Deployment and Service (upstream image for now; Phase 2 switches to the image our pipeline builds and signs). |
 | `workloads/identity-demo/` | Plan 1.7: a service account tied to an IAM role, a `SecretProviderClass` and a pod that prints one Parameter Store secret. `ACCOUNT_ID` in `serviceaccount.yaml` is a placeholder until the AWS account exists; an account ID is not a secret (AWS docs), so the real one may be committed here. |
 | `policies/` | Kyverno policies, delivered by `apps/policies.yaml` (wave 1, after Kyverno). Three `ImageValidatingPolicy` files for our ECR images (`ecr-signature.yaml`, `ecr-sbom.yaml`, `ecr-vuln.yaml`, 720h scan window; `ACCOUNT_ID` is a placeholder until the account exists) and 17 `ValidatingPolicy` files for the CIS and Pod Security Standards controls (`pss-*.yaml`, `cis-*.yaml`; see "Pod security policies" below). Accepted by Kyverno 1.19.1 on kind; nothing past that is proven. |
 | `policy-tests/` | Fixtures and `run.sh` for the 17 pod security policies: server-side dry runs against a cluster that has Kyverno and the policies. Not synced by ArgoCD (outside `policies/`). |
+| `monitoring/` | Phase 2/3 observability: values for Policy Reporter, Prometheus and Grafana (`*-values.yaml`) and `config/dashboard-kyverno.yaml`, the Grafana dashboard JSON in a ConfigMap. Delivered by `apps/policy-reporter.yaml`, `apps/prometheus.yaml` and `apps/monitoring-config.yaml` (wave 2) and `apps/grafana.yaml` (wave 3). See "Monitoring" below. |
 | `kyverno/values.yaml` | R2: values for the Kyverno chart 3.9.1 (v1.19.1): ADR-002 sizes, two admission replicas, hard spreading. The IRSA annotation is commented out on purpose: R2 step 3 runs without it, step 4 adds it in a second commit. Used by `apps/kyverno.yaml` (wave 0). WRITTEN, NOT yet tested in ArgoCD. |
 | `PARKED.md` | The scope tripwires (R5) and the ideas they parked. Read the ideas after Phase 2 ships. |
 | `RUNBOOK.md` | What a confusing refusal from the admission gate really means, and the emergency procedure (from ADR-002). |
@@ -37,13 +38,31 @@ The only things done by hand are the first install of ArgoCD and the root app, b
 
 Decisions and limits:
 - Action is `[Deny, Audit]`: violations are refused and also appear in PolicyReports.
-- Scope: Pod creation, and through autogen Deployments, StatefulSets, DaemonSets, Jobs and CronJobs. Namespaces `kube-system`, `kube-node-lease`, `kube-public`, `kyverno` and `argocd` are excluded (the Secrets Store CSI driver in `kube-system` is privileged by design). On 2026-10-16 the rendered Kyverno 3.9.1 and Argo CD 10.10.3 charts passed all 14 PSS policies; they fail only `cis-sa-token` (the controllers need the API token) and, for Argo CD, `cis-secrets-as-files`. Narrowing the exclusion to those two policies is possible, at the cost that a chart upgrade could then block Kyverno or ArgoCD pods.
+- Scope: Pod creation, and through autogen Deployments, StatefulSets, DaemonSets, Jobs and CronJobs. Namespaces `kube-system`, `kube-node-lease`, `kube-public`, `kyverno`, `argocd`, `monitoring` and `policy-reporter` are excluded (the Secrets Store CSI driver in `kube-system` is privileged by design; `monitoring` and `policy-reporter` were added on 2026-10-16, see "Monitoring"). On 2026-10-16 the rendered Kyverno 3.9.1 and Argo CD 10.10.3 charts passed all 14 PSS policies; they fail only `cis-sa-token` (the controllers need the API token) and, for Argo CD, `cis-secrets-as-files`. Narrowing the exclusion to those two policies is possible, at the cost that a chart upgrade could then block Kyverno or ArgoCD pods.
 - Ephemeral containers (`kubectl debug`) are NOT checked. Kyverno's autogen only works when a policy matches `pods` alone, and matching the `pods/ephemeralcontainers` subresource also needs extra RBAC for the reports controller. Pod updates are not matched either (a pod's spec is immutable).
 - `cis-sa-token` has no escape hatch: a workload that needs the API token needs a `PolicyException` in its own namespace.
 - Not covered: Windows HostProcess (5.2.11, Linux cluster), RBAC (5.1.x) and NetworkPolicy (5.3.x), which are not pod admission checks; 5.2.1 is met by Kyverno itself.
 - Workloads in `workloads/` had to change to pass: `podinfo` got `runAsNonRoot` with `runAsUser: 100` (its image user `app` is not numeric) and `automountServiceAccountToken: false`; `identity-demo` got `automountServiceAccountToken: false` (unverified until EKS).
 
 Test: with a kind cluster that has Kyverno (chart 3.9.1) and `kubectl apply -f policies/pss-*.yaml -f policies/cis-*.yaml` done, run `policy-tests/run.sh`. 34 violating fixtures must be refused by the named policy and 8 compliant ones accepted. Result on 2026-10-16: 42 of 42, and `podinfo` shows 17 passes in its PolicyReport. Not tested: delivery of these files by ArgoCD, anything on EKS, the cost of the 17 policies on admission latency or memory.
+
+## Monitoring
+
+Installed, not built (R5): Policy Reporter for the per-pod admission state, Prometheus and Grafana for the history. Namespaces `policy-reporter` (the UI) and `monitoring` (Prometheus, Grafana); both are excluded from the pod security policies, because the Prometheus and Policy Reporter pods need the API token (`cis-sa-token`) and, like ArgoCD and Kyverno, they are tools we install but do not build (ADR-002 decision 10).
+
+| Piece | Chart | Notes |
+| --- | --- | --- |
+| Policy Reporter | `policy-reporter` 3.11.1 (spec said 3.10.0 in September) | UI on, Kyverno plugin, metrics and the chart's own dashboards off. The UI pod has no service account token. |
+| Prometheus | `prometheus` 29.37.0 (Prometheus v3.15.0) | Plain Prometheus, no operator, no Alertmanager, no kube-state-metrics, no PVC (emptyDir, 6 h of data, 15 s scrape). Scrapes only the Kyverno admission controller pods (job `kyverno-admission`, port 8000). Hardened to the PSS restricted profile except for the API token it needs for pod discovery. |
+| Grafana | `grafana` 13.2.6 (Grafana 13.2.2) from `https://grafana-community.github.io/helm-charts` | The old repo `grafana.github.io/helm-charts` ended at 10.5.15, which is marked deprecated (the chart moved to `grafana-community/helm-charts` on 2026-01-30). Datasource and dashboard come from Git; no sidecar, no plugins, no token. A startup probe covers the slow first start (it re-runs its migrations on every start). |
+
+Dashboard `Forge: Kyverno admission` (folder Forge): replicas answering, allowed versus refused requests per second, refused requests by namespace, admission latency (p50, p95), CIS/PSS results per policy, image policy results per policy. Edit the JSON in `monitoring/config/dashboard-kyverno.yaml`, never in the UI.
+
+Alert (provisioned in `monitoring/grafana-values.yaml`): fewer than 2 admission replicas answering, which is ADR-002 decision 4. It shows in Grafana only (no Alertmanager, no contact point). Measured on kind: after one of two replicas was removed, the alert went Pending after 46 s and Firing after 2 min 47 s (15 s scrape; with the chart's 60 s scrape it took 1 min 39 s and 3 min 42 s), and it cleared about 2 minutes after the replica came back. The second ADR-002 alert, Kyverno webhook configurations missing, is NOT built: it needs kube-state-metrics. Both gaps are accepted in ADR-002 decision 9.
+
+Access: no ingress. `kubectl -n monitoring port-forward svc/grafana 3000:80` (user `admin`, password from `kubectl -n monitoring get secret grafana -o jsonpath='{.data.admin-password}' | base64 -d`), `kubectl -n policy-reporter port-forward svc/policy-reporter-ui 8082:8080`.
+
+Tested on a one-node kind cluster on 2026-10-16 with Helm and the values files (see the session log in `status.md`). Not tested: delivery by ArgoCD, anything on EKS, resource use on the real nodes, how the dashboard looks (queries were checked through Grafana's API, not by eye).
 
 ## Pins
 

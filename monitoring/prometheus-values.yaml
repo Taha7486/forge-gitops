@@ -1,0 +1,75 @@
+# Prometheus for Forge (chart 29.37.0 = Prometheus v3.15.0). Plain Prometheus, not
+# kube-prometheus-stack: the two small nodes cannot carry an operator, and the only thing
+# scraped is Kyverno's admission controller (ADR-002 decision 9). No Alertmanager: the two
+# ADR-002 alerts live in Grafana. No PVC (rules file, item 17): data sits in an emptyDir,
+# so a restart loses the history, which is fine for a demo cluster.
+alertmanager:
+  enabled: false
+kube-state-metrics:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+# Hardened to the PSS restricted profile. The only policy it still fails is cis-sa-token:
+# service discovery needs the API token. So the monitoring namespace is excluded from the
+# pod security policies (the same reason as ArgoCD and Kyverno), not because of these pods.
+server:
+  # 15 s, not the chart's 1 m: when an admission replica disappears, Prometheus keeps its
+  # `up` series for about two scrape intervals before marking it stale, so the alert
+  # started only after about 100 s at 1 m (measured on kind 2026-10-16). One target, a few
+  # series: the cost is negligible.
+  global:
+    scrape_interval: 15s
+  retention: 6h
+  persistentVolume:
+    enabled: false
+  securityContext:
+    runAsUser: 65534
+    runAsNonRoot: true
+    runAsGroup: 65534
+    fsGroup: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: [ALL]}
+  resources:
+    requests: {cpu: 50m, memory: 192Mi}
+    limits: {memory: 384Mi}
+configmapReload:
+  prometheus:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}
+    resources:
+      requests: {cpu: 5m, memory: 16Mi}
+      limits: {memory: 32Mi}
+# The chart ships ten scrape jobs for a whole cluster. Keep only Prometheus itself.
+scrapeConfigs:
+  kubernetes-api-servers: {enabled: false}
+  kubernetes-nodes: {enabled: false}
+  kubernetes-nodes-cadvisor: {enabled: false}
+  kubernetes-service-endpoints: {enabled: false}
+  kubernetes-service-endpoints-slow: {enabled: false}
+  prometheus-pushgateway: {enabled: false}
+  kubernetes-services: {enabled: false}
+  kubernetes-pods: {enabled: false}
+  kubernetes-pods-slow: {enabled: false}
+# One job per admission controller pod, so `up` counts the replicas (the first ADR-002 alert).
+extraScrapeConfigs: |
+  - job_name: kyverno-admission
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [kyverno]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        action: keep
+        regex: admission-controller
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        action: keep
+        regex: metrics-port
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod

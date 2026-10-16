@@ -3,7 +3,7 @@
 # CIS 5.7.2 names docker/default, which is RuntimeDefault; Localhost is allowed by PSS.
 # Matches Pod creation; Deployments, StatefulSets, DaemonSets, Jobs and CronJobs through
 # autogen. Ephemeral containers are not covered (see README). Namespaces kube-system,
-# kube-node-lease, kube-public, kyverno and argocd are excluded.
+# kube-node-lease, kube-public, kyverno, argocd, monitoring and policy-reporter are excluded.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -24,7 +24,7 @@ spec:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: NotIn
-          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd]
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd, monitoring, policy-reporter]
     resourceRules:
       - apiGroups: [""]
         apiVersions: [v1]

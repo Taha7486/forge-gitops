@@ -1,0 +1,32 @@
+# Policy Reporter UI (chart 3.11.1), values in monitoring/policy-reporter-values.yaml. Wave 2:
+# it reads the PolicyReport kinds that Kyverno (wave 0) installs. The spec pinned 3.10.0 in
+# September; 3.11.1 is the chart version current on 2026-10-16.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-reporter
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  sources:
+    - repoURL: https://kyverno.github.io/policy-reporter
+      chart: policy-reporter
+      targetRevision: 3.11.1
+      helm:
+        releaseName: policy-reporter
+        valueFiles:
+          - $values/monitoring/policy-reporter-values.yaml
+    - repoURL: https://github.com/Taha7486/forge-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: policy-reporter
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,31 @@
+# Grafana (chart 10.5.15), values in monitoring/grafana-values.yaml. Wave 3: the dashboard
+# ConfigMap (apps/monitoring-config.yaml) and Prometheus (wave 2) must exist first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: grafana
+      targetRevision: 10.5.15
+      helm:
+        releaseName: grafana
+        valueFiles:
+          - $values/monitoring/grafana-values.yaml
+    - repoURL: https://github.com/Taha7486/forge-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

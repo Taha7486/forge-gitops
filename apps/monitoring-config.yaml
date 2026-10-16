@@ -1,0 +1,24 @@
+# The Grafana dashboard as a ConfigMap (monitoring/config/). Wave 2, before Grafana (wave 3),
+# which mounts it. Plain manifests, no chart. The alert rules are in monitoring/grafana-values.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Taha7486/forge-gitops.git
+    targetRevision: main
+    path: monitoring/config
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,375 @@
+# The Grafana dashboard for Kyverno (R5: dashboard JSON in a ConfigMap, no plugin). Grafana
+# mounts it through `dashboardsConfigMaps` in monitoring/grafana-values.yaml. Edit the JSON
+# here, never in the Grafana UI (the UI copy is read-only and lost on restart).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: forge-dashboards
+  namespace: monitoring
+data:
+  kyverno.json: |
+    {
+      "uid": "forge-kyverno",
+      "title": "Forge: Kyverno admission",
+      "tags": [
+        "forge",
+        "kyverno"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "editable": false,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Admission controller replicas up",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "Targets of the kyverno-admission scrape job that answer. ADR-002 wants 2; below 2 the Grafana alert fires.",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "count(up{job=\"kyverno-admission\"} == 1) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 2
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Admission requests per second: allowed vs refused",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "A refusal leaves no Event and no PolicyReport (ADR-002 decision 9), so this counter is the only history.",
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 18,
+            "h": 5
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (request_allowed) (rate(kyverno_admission_requests_total[5m]))",
+              "legendFormat": "allowed = {{request_allowed}}",
+              "refId": "A",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 3,
+          "title": "Refused admission requests by namespace (selected range)",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "Requests the cluster refused, per namespace, over the time range chosen at the top.",
+          "gridPos": {
+            "x": 0,
+            "y": 5,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (resource_namespace) (increase(kyverno_admission_requests_total{request_allowed=\"false\"}[$__range]))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value": "count"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "count",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 4,
+          "title": "Admission review latency",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "How long Kyverno takes to answer an admission review (all policies together).",
+          "gridPos": {
+            "x": 12,
+            "y": 5,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(kyverno_admission_review_duration_seconds_bucket[5m])))",
+              "legendFormat": "p50",
+              "refId": "A",
+              "instant": false,
+              "range": true
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(kyverno_admission_review_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95",
+              "refId": "B",
+              "instant": false,
+              "range": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 5,
+          "title": "CIS/PSS policy results (selected range)",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "Results of the 17 pod security policies (ValidatingPolicy) per policy and result.",
+          "gridPos": {
+            "x": 0,
+            "y": 13,
+            "w": 12,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (policy_name, result) (increase(kyverno_validating_policy_results_total[$__range]))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value": "count"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "count",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 6,
+          "title": "Image policy results (selected range)",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "description": "Results of the three ECR image policies (signature, SBOM, scan freshness).",
+          "gridPos": {
+            "x": 12,
+            "y": 13,
+            "w": 12,
+            "h": 9
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (policy_name, result) (increase(kyverno_image_validating_policy_results_total[$__range]))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "Value": "count"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "count",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "options": {
+            "showHeader": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0
+            },
+            "overrides": []
+          }
+        }
+      ],
+      "templating": {
+        "list": []
+      },
+      "annotations": {
+        "list": []
+      }
+    }
