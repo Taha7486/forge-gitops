@@ -88,7 +88,7 @@ customRules:
         forge_juice_shop and forge_open_read and
         not proc.name startswith "runc:" and
         (fd.name in (forge_sensitive_files) or fd.name glob "/proc/*/environ" or
-         fd.name startswith /root/.ssh or fd.name startswith /root/.aws)
+         fd.name startswith /root/.ssh/ or fd.name startswith /root/.aws/)
       output: >-
         Sensitive file read in Juice Shop | pod=%k8s.pod.name container=%container.name
         file=%fd.name proc=%proc.name cmdline=%proc.cmdline user=%user.name
@@ -96,15 +96,21 @@ customRules:
       tags: [forge, juice-shop, credential_access]
 
     # R3. The server-side request forgery path: the cloud metadata address (and the rest of the
-    # link-local range). The connection attempt is what counts, whether or not it succeeds.
+    # link-local range). The connection attempt is what counts, whether or not it succeeds. A connect
+    # that fails at once or is interrupted (blocking client, no route) has no connection tuple, so
+    # fd.snet and fd.sip are empty; the destination is then only in the event argument `addr`
+    # (text "ip:port"; the IPv4-mapped IPv6 form shows as "::ffff:169.254..."), which the last three
+    # terms match.
     - rule: Juice Shop contacts the metadata address
       desc: A Juice Shop process connected to a link-local address such as the cloud metadata service.
       condition: >-
         forge_juice_shop and evt.type = connect and (fd.typechar = 4 or fd.typechar = 6) and
-        (fd.snet = "169.254.0.0/16" or fd.sip = "fd00:ec2::254")
+        (fd.snet = "169.254.0.0/16" or fd.sip = "fd00:ec2::254" or
+         evt.arg.addr startswith "169.254." or evt.arg.addr startswith "::ffff:169.254." or
+         evt.arg.addr startswith "fd00:ec2::254:")
       output: >-
         Metadata address contacted from Juice Shop | pod=%k8s.pod.name container=%container.name
-        connection=%fd.name proc=%proc.name cmdline=%proc.cmdline
+        connection=%fd.name addr=%evt.arg.addr result=%evt.arg.res proc=%proc.name cmdline=%proc.cmdline
       priority: CRITICAL
       tags: [forge, juice-shop, credential_access, ssrf]
 
