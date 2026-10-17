@@ -28,7 +28,7 @@ The only things done by hand are the first install of ArgoCD and the root app, b
 
 ## Pod security policies
 
-17 `ValidatingPolicy` files, one per control, so one PolicyReport result maps to one control. Each carries the annotation `forge.dev/controls` with the CIS (Kubernetes Benchmark v1.9 numbering) and PSS control it enforces; `conformity` (Phase 3) will read it.
+17 `ValidatingPolicy` files, one per control, so one PolicyReport result maps to one control. Each carries the annotation `forge.dev/controls` with the CIS (Kubernetes Benchmark v1.9 numbering) and PSS control it enforces; `conformity` (Phase 3) will read it. The three `ecr-*` image policies carry the same annotation with `FORGE SC-1` to `SC-3` (supply-chain controls, not CIS numbers).
 
 | Group | Files |
 | --- | --- |
