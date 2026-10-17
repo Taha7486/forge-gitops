@@ -1,0 +1,66 @@
+# Phase 3 adversarial workload: OWASP Juice Shop v20.3.0 (commit f189f521266f42c6bd05884468292000cee852ed),
+# deliberately vulnerable. Rebuilt from source by forge-factory, never mirrored: the image below is the
+# one OUR pipeline builds, signs and attests. ACCOUNT_ID and the tag are placeholders until the AWS
+# account and that build exist (an account ID is not a secret). Until then the ArgoCD app is not
+# synced (apps/juice-shop.yaml has no automated sync).
+# Hardened to pass the 17 policies in policies/ with no PolicyException. Port 3000, ClusterIP only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: juice-shop
+  namespace: juice-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: juice-shop
+  template:
+    metadata:
+      labels:
+        app: juice-shop
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: juice-shop
+          image: ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/juice-shop:TAG
+          ports:
+            - name: http
+              containerPort: 3000
+          startupProbe:
+            httpGet:
+              path: /rest/admin/application-version
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /rest/admin/application-version
+              port: http
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /rest/admin/application-version
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            # false on purpose: the app keeps its SQLite database in data/juice-shop.sqlite next to the
+            # static files it needs, and writes ftp/, logs/ and i18n/ as well. A read-only root made it
+            # crash at start (SQLITE_CANTOPEN, tested on kind 2026-10-17). No policy asks for true.
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

@@ -1,0 +1,23 @@
+# Phase 3 adversarial workload (OWASP Juice Shop, deliberately vulnerable).
+# NO automated sync on purpose: the image forge-factory has to build, sign and attest
+# (forge/juice-shop in ECR) does not exist yet, and the Trivy gate will block it until waivers
+# cover its findings. The root app creates this Application; nothing is deployed until it is
+# synced by hand (Sync button in the ArgoCD UI, or `argocd app sync juice-shop`), which is also
+# the demo step. Once the build works, add syncPolicy.automated like podinfo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: juice-shop
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Taha7486/forge-gitops.git
+    targetRevision: main
+    path: workloads/juice-shop
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: juice-shop
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
