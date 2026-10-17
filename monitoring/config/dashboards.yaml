@@ -1,6 +1,7 @@
-# The Grafana dashboard for Kyverno (R5: dashboard JSON in a ConfigMap, no plugin). Grafana
-# mounts it through `dashboardsConfigMaps` in monitoring/grafana-values.yaml. Edit the JSON
-# here, never in the Grafana UI (the UI copy is read-only and lost on restart).
+# The Grafana dashboards: Kyverno admission (kyverno.json) and Falco runtime (falco.json), both
+# R5-compliant (dashboard JSON in a ConfigMap, no plugin). Grafana mounts the ConfigMap through
+# `dashboardsConfigMaps` in monitoring/grafana-values.yaml. Edit the JSON here, never in the Grafana
+# UI (the UI copy is read-only and lost on restart).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -372,4 +373,225 @@ data:
       "annotations": {
         "list": []
       }
+    }
+  falco.json: |
+    {
+      "uid": "forge-falco",
+      "title": "Forge: Falco runtime (Juice Shop)",
+      "tags": [
+        "forge",
+        "falco"
+      ],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "editable": false,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Firing alerts",
+          "type": "alertlist",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 7
+          },
+          "description": "Grafana alert rule 'Falco rule matched in Juice Shop' (monitoring/grafana-values.yaml). No Alertmanager: this list and Alerting > Alert rules are where alerts show.",
+          "options": {
+            "viewMode": "list",
+            "groupMode": "default",
+            "groupBy": [],
+            "maxItems": 20,
+            "sortOrder": 1,
+            "dashboardAlerts": false,
+            "alertName": "Falco",
+            "alertInstanceLabelFilter": "",
+            "stateFilter": {
+              "firing": true,
+              "pending": true,
+              "noData": false,
+              "normal": false,
+              "error": true
+            },
+            "showInstances": true
+          }
+        },
+        {
+          "id": 2,
+          "title": "Falcosidekick targets up",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 7,
+            "w": 6,
+            "h": 5
+          },
+          "description": "Targets of the falcosidekick scrape job that answer. 0 means the metric path is down (Falco may still run).",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "count(up{job=\"falcosidekick\"} == 1) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Events since Falcosidekick started, by rule",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 7,
+            "w": 18,
+            "h": 5
+          },
+          "description": "Cumulative counter per rule (it restarts at 0 when Falcosidekick restarts). The cumulative form is used because rate() would miss the first event of a new series.",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (rule) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name=\"juice-shop\"})",
+              "legendFormat": "{{rule}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Events by rule, pod and process",
+          "type": "table",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "forge-prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 12,
+            "w": 24,
+            "h": 8
+          },
+          "description": "Counter totals since Falcosidekick started. The container runtime's own setup commands on kind (mount-product-files, jq, cp, mount) appear at every container start; they do not exist on EKS.",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "forge-prometheus"
+              },
+              "expr": "sum by (rule, priority_raw, k8s_pod_name, proc_name) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name=\"juice-shop\"})",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "rule": "Rule",
+                  "priority_raw": "Priority",
+                  "k8s_pod_name": "Pod",
+                  "proc_name": "Process",
+                  "Value": "Events"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Events",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true
+          }
+        }
+      ]
     }

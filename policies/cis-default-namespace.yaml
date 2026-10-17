@@ -2,7 +2,7 @@
 # No workloads in the default namespace. Uses namespaceObject, which autogen does not rewrite.
 # Matches Pod creation; Deployments, StatefulSets, DaemonSets, Jobs and CronJobs through
 # autogen. Ephemeral containers are not covered (see README). Namespaces kube-system,
-# kube-node-lease, kube-public, kyverno, argocd, monitoring and policy-reporter are excluded.
+# kube-node-lease, kube-public, kyverno, argocd, monitoring, policy-reporter and falco are excluded.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -23,7 +23,7 @@ spec:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: NotIn
-          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd, monitoring, policy-reporter]
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd, monitoring, policy-reporter, falco]
     resourceRules:
       - apiGroups: [""]
         apiVersions: [v1]

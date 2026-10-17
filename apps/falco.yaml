@@ -1,0 +1,33 @@
+# Phase 4 runtime detection (Falco chart 9.1.0 = Falco 0.44.1), values and the Juice Shop rules in
+# falco/falco-values.yaml. NO automated sync on purpose, like juice-shop: the driver is untested on
+# the Amazon Linux 2023 nodes and the load on two nodes is unmeasured (plan 1.9, item 5), so Falco
+# must not appear on the cluster by itself during Phases 1 and 2. Sync it by hand
+# (`argocd app sync falco falcosidekick`) when Phase 4 is reached, and measure then. The release name
+# must stay "falco": Falco posts its events to http://falcosidekick.falco.svc.cluster.local:2801/.
+# The namespace "falco" is excluded from the 17 pod security policies (policies/).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  sources:
+    - repoURL: https://falcosecurity.github.io/charts
+      chart: falco
+      targetRevision: 9.1.0
+      helm:
+        releaseName: falco
+        valueFiles:
+          - $values/falco/falco-values.yaml
+    - repoURL: https://github.com/Taha7486/forge-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

@@ -101,3 +101,53 @@ alerting:
                   expression: B
                   conditions:
                     - evaluator: {type: lt, params: [2]}
+      # Phase 4 (apps/falco.yaml, apps/falcosidekick.yaml): fires when a Falco rule matched in the
+      # juice-shop namespace in the last minute. Falcosidekick's counter is created by its FIRST
+      # event, and increase()/rate() ignore a series' first sample, so the expression is
+      # (now - one minute ago) OR (series that did not exist one minute ago). No Alertmanager and
+      # no contact point: it shows in Grafana (Alerting) and in the dashboard's alert list.
+      # No events means no series, which is the normal state (noDataState OK).
+      - orgId: 1
+        name: falco-runtime
+        folder: Forge
+        interval: 10s
+        rules:
+          - uid: falco-juice-shop
+            title: Falco rule matched in Juice Shop
+            condition: C
+            for: 0s
+            noDataState: OK
+            execErrState: Error
+            annotations:
+              # The chart runs Helm's tpl over these values, so Grafana's own {{ }} is wrapped in a raw string.
+              summary: 'Falco: {{`{{ $labels.rule }}`}} (pod {{`{{ $labels.k8s_pod_name }}`}})'
+            labels:
+              severity: critical
+            data:
+              - refId: A
+                relativeTimeRange: {from: 180, to: 0}
+                datasourceUid: forge-prometheus
+                model:
+                  refId: A
+                  expr: >-
+                    (sum by (rule, k8s_pod_name) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name="juice-shop"})
+                    - sum by (rule, k8s_pod_name) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name="juice-shop"} offset 1m))
+                    or
+                    (sum by (rule, k8s_pod_name) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name="juice-shop"})
+                    unless sum by (rule, k8s_pod_name) (falcosecurity_falcosidekick_falco_events_total{k8s_ns_name="juice-shop"} offset 1m))
+                  instant: true
+              - refId: B
+                datasourceUid: __expr__
+                model:
+                  refId: B
+                  type: reduce
+                  expression: A
+                  reducer: last
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  refId: C
+                  type: threshold
+                  expression: B
+                  conditions:
+                    - evaluator: {type: gt, params: [0]}

@@ -10,7 +10,7 @@
 # "apply --dry-run=server" is an UPDATE and would pass anything. So every "namespace:" in a
 # manifest is rewritten to "wlcheck" (except "default", which the default-namespace policy must
 # see), and the object is created there in a dry run. This is stricter than the live cluster for
-# manifests in an excluded namespace (kube-system, kyverno, argocd, monitoring, policy-reporter).
+# manifests in an excluded namespace (kube-system, kyverno, argocd, monitoring, policy-reporter, falco).
 # WORKLOADS_DIR overrides the directory, to test this script with a deliberately broken manifest.
 set -u
 cd "$(dirname "$0")/.."

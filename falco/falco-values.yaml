@@ -1,0 +1,157 @@
+# Falco (chart 9.1.0 = Falco 0.44.1, the spec's pin; 0.45.0 is out since 2026-09-21 and is not used).
+# Phase 4 runtime detection for Juice Shop. Design decisions of 2026-10-17:
+#  - modern eBPF driver in least-privileged mode (capabilities, not a privileged container);
+#  - the stock rule set is NOT loaded (rules_files below lists only our rules) and falcoctl is off:
+#    the image already contains the container plugin, so nothing is downloaded at run time;
+#  - only the containerd socket is mounted (no Docker, Podman, CRI-O, LXC);
+#  - no k8s-metacollector: the container plugin gives k8s.ns.name and k8s.pod.name;
+#  - events go as JSON to Falcosidekick (apps/falcosidekick.yaml), which exposes them as Prometheus
+#    metrics for the Grafana alert (monitoring/grafana-values.yaml). No Alertmanager.
+# The namespace `falco` is excluded from the 17 pod security policies (the driver needs host access).
+# The rules are between the BEGIN and END markers; falco/check-rules.sh validates exactly that text
+# with the pinned Falco image.
+driver:
+  kind: modern_ebpf
+  modernEbpf:
+    leastPrivileged: true
+collectors:
+  containerEngine:
+    engines:
+      docker: {enabled: false}
+      podman: {enabled: false}
+      containerd: {enabled: false}
+      cri:
+        enabled: true
+        sockets: ["/run/containerd/containerd.sock"]
+      lxc: {enabled: false}
+      libvirt_lxc: {enabled: false}
+      bpm: {enabled: false}
+falcoctl:
+  artifact:
+    install: {enabled: false}
+    follow: {enabled: false}
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {memory: 512Mi}
+falco:
+  # The image's own config.d fragment loads the container plugin a second time and Falco refuses to
+  # start ("found another plugin with name container"); the chart's falco.yaml already configures it.
+  config_files: []
+  rules_files:
+    - /etc/falco/rules.d
+  json_output: true
+  http_output:
+    enabled: true
+    url: http://falcosidekick.falco.svc.cluster.local:2801/
+customRules:
+  juice-shop.yaml: |-
+    # BEGIN RULES
+    - required_engine_version: 0.57.0
+
+    - required_plugin_versions:
+        - name: container
+          version: 0.4.0
+
+    # Everything below is scoped to the juice-shop namespace. Nothing is switched on for other
+    # namespaces, and the stock Falco rule set is not loaded.
+    - macro: forge_juice_shop
+      condition: (container.id != host and k8s.ns.name = "juice-shop")
+
+    - macro: forge_spawned_process
+      condition: (evt.type in (execve, execveat) and evt.rawres >= 0)
+
+    - macro: forge_open_read
+      condition: (evt.type in (open, openat, openat2) and evt.is_open_read = true and fd.typechar = 'f' and fd.num >= 0)
+
+    - macro: forge_open_write
+      condition: (evt.type in (open, openat, openat2) and evt.is_open_write = true and fd.typechar = 'f' and fd.num >= 0)
+
+    # R1. The image is distroless: its only process is node. Anything else that starts in the pod
+    # (a shell, curl, a binary the attacker dropped, a `kubectl debug` container) is not normal.
+    - rule: Juice Shop unexpected process
+      desc: A process other than node started in a Juice Shop pod.
+      condition: forge_juice_shop and forge_spawned_process and not proc.name = node
+      output: >-
+        Unexpected process in Juice Shop | pod=%k8s.pod.name container=%container.name
+        proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname user=%user.name
+      priority: CRITICAL
+      tags: [forge, juice-shop, execution]
+
+    # R2. Credential and secret files. /etc/passwd is the file the XXE challenge reads. runc reads
+    # /etc/passwd in every container at start (to look up the user), so processes named runc:... are skipped.
+    - list: forge_sensitive_files
+      items: [/etc/passwd, /etc/shadow, /etc/gshadow, /etc/sudoers]
+
+    - rule: Juice Shop sensitive file read
+      desc: A Juice Shop process opened a credential file or the environment of a process.
+      condition: >-
+        forge_juice_shop and forge_open_read and
+        not proc.name startswith "runc:" and
+        (fd.name in (forge_sensitive_files) or fd.name glob "/proc/*/environ" or
+         fd.name startswith /root/.ssh or fd.name startswith /root/.aws)
+      output: >-
+        Sensitive file read in Juice Shop | pod=%k8s.pod.name container=%container.name
+        file=%fd.name proc=%proc.name cmdline=%proc.cmdline user=%user.name
+      priority: WARNING
+      tags: [forge, juice-shop, credential_access]
+
+    # R3. The server-side request forgery path: the cloud metadata address (and the rest of the
+    # link-local range). The connection attempt is what counts, whether or not it succeeds.
+    - rule: Juice Shop contacts the metadata address
+      desc: A Juice Shop process connected to a link-local address such as the cloud metadata service.
+      condition: >-
+        forge_juice_shop and evt.type = connect and (fd.typechar = 4 or fd.typechar = 6) and
+        (fd.snet = "169.254.0.0/16" or fd.sip = "fd00:ec2::254")
+      output: >-
+        Metadata address contacted from Juice Shop | pod=%k8s.pod.name container=%container.name
+        connection=%fd.name proc=%proc.name cmdline=%proc.cmdline
+      priority: CRITICAL
+      tags: [forge, juice-shop, credential_access, ssrf]
+
+    # R4. Application code or content changed at run time. The allowed set was measured on kind
+    # (v20.3.0, 2026-10-17, see falco/README.md): the database and logs, the translations, the
+    # profile pictures, and exactly the files the app rewrites at every start. Re-measure when the
+    # Juice Shop version changes. The boot files are allowed only while the process is young (the
+    # first 5 minutes; start-up took about 70 s on kind): ftp/legal.md, the target of the zip-slip
+    # challenge, is one of them, so an overwrite at any later time is caught. Blind spot: the same
+    # write during the first 5 minutes after a (re)start looks like the app's own.
+    - list: forge_juice_shop_boot_files
+      items:
+        - /juice-shop/ftp/legal.md
+        - /juice-shop/.well-known/csaf/provider-metadata.json
+        - /juice-shop/frontend/dist/frontend/index.html
+        - /juice-shop/frontend/dist/frontend/assets/private/threejs-demo.html
+        - /juice-shop/frontend/dist/frontend/assets/public/images/hackingInstructor.png
+        - /juice-shop/frontend/dist/frontend/assets/public/images/chatbotAvatar.png
+        - /juice-shop/frontend/dist/frontend/assets/public/videos/owasp_promo.vtt
+
+    - macro: forge_juice_shop_write_dirs
+      condition: >-
+        (fd.name startswith /juice-shop/data/ or fd.name startswith /juice-shop/logs/ or
+         fd.name startswith /juice-shop/i18n/ or
+         fd.name startswith /juice-shop/frontend/dist/frontend/assets/public/images/uploads/)
+
+    - rule: Juice Shop writes outside its data directories
+      desc: A file under /juice-shop was opened for writing outside the directories Juice Shop writes to.
+      condition: >-
+        forge_juice_shop and forge_open_write and fd.name startswith /juice-shop/ and
+        not forge_juice_shop_write_dirs and
+        not (fd.name in (forge_juice_shop_boot_files) and proc.duration < 300000000000)
+      output: >-
+        Unexpected write in Juice Shop | pod=%k8s.pod.name container=%container.name
+        file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+      priority: ERROR
+      tags: [forge, juice-shop, persistence]
+
+    # R5. A new listening socket: a bind or reverse shell. Juice Shop listens on 3000 only.
+    - rule: Juice Shop unexpected listener
+      desc: A Juice Shop pod process started listening on a port other than 3000.
+      condition: >-
+        forge_juice_shop and evt.type = listen and evt.rawres >= 0 and
+        (fd.typechar = 4 or fd.typechar = 6) and fd.sport != 3000
+      output: >-
+        Unexpected listener in Juice Shop | pod=%k8s.pod.name container=%container.name
+        listen=%fd.name proc=%proc.name cmdline=%proc.cmdline
+      priority: CRITICAL
+      tags: [forge, juice-shop, command_and_control]
+    # END RULES

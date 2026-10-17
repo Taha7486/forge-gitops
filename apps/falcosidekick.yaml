@@ -1,0 +1,31 @@
+# Falcosidekick (chart 0.14.0, image 2.32.0): turns Falco's events into Prometheus metrics for the
+# Grafana alert. Values in falco/falcosidekick-values.yaml. NO automated sync, same reason as
+# apps/falco.yaml. The release name must stay "falcosidekick" (the service name is in the Falco
+# values). skipTests: the chart ships a Helm test pod (curlimages/curl) that must not be deployed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falcosidekick
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  sources:
+    - repoURL: https://falcosecurity.github.io/charts
+      chart: falcosidekick
+      targetRevision: 0.14.0
+      helm:
+        releaseName: falcosidekick
+        skipTests: true
+        valueFiles:
+          - $values/falco/falcosidekick-values.yaml
+    - repoURL: https://github.com/Taha7486/forge-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

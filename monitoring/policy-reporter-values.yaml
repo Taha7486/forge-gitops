@@ -1,7 +1,7 @@
 # Policy Reporter (chart 3.11.1): the UI that shows Kyverno's PolicyReports per pod and per
 # policy. It only reads reports from the API server; no database, no volume. The Kyverno
 # plugin, the metrics endpoint and the chart's own Grafana dashboards stay off: our
-# dashboard is monitoring/config/dashboard-kyverno.yaml (R5: no second dashboard stack).
+# dashboard is monitoring/config/dashboards.yaml (R5: no second dashboard stack).
 replicaCount: 1
 resources:
   requests: {cpu: 25m, memory: 64Mi}
