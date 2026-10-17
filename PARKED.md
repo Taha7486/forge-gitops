@@ -23,3 +23,11 @@ These are written rules checked by hand. A CI check for the first tripwire was c
 - **Need:** notice unexpected transparency-log entries made with Forge's signing identity.
 - **Almost covered by:** the bundle attached to each image already carries its log entry and inclusion proof (ADR-001). Check Sigstore's own `rekor-monitor` before building anything.
 - **Constraint:** Rekor v2 has no search index, and Forge pins Rekor v1 for now; a monitor would have to rely on whatever the pinned log supports.
+
+## Gatekeeper as a second policy engine (spec §6)
+
+- **Date:** 2026-10-17.
+- **Need:** the Azure design ran Azure Policy (Gatekeeper underneath) next to Kyverno; the target job description names "Azure Policy, OPA/Gatekeeper".
+- **Almost covered by:** the 17 Kyverno `ValidatingPolicy` files (CIS/PSS) and the `ImageValidatingPolicy` chain. Decided: Kyverno alone.
+- **Cost of building it:** a second admission webhook (failure policy and latency to re-measure after ADR-002), Rego or a Gatekeeper library, a second result format for `conformity`, and a boundary with nothing left to put on the other side.
+- **Revisit trigger:** after Phase 2 ships, if a live job description requires Gatekeeper.
