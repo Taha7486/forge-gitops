@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-excluded-namespace
+  namespace: kube-system
+spec:
+  containers:
+  - name: app
+    image: docker.io/library/nginx:1.27-alpine

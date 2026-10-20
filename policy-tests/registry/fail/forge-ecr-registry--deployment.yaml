@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fail-deployment
+  namespace: pt
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: fail-deployment}
+  template:
+    metadata:
+      labels: {app: fail-deployment}
+    spec:
+      containers:
+      - name: app
+        image: docker.io/library/nginx:1.27-alpine

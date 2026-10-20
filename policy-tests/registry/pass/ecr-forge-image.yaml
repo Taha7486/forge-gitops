@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pass-ecr-forge-image
+  namespace: pt
+spec:
+  containers:
+  - name: app
+    image: 123456789012.dkr.ecr.eu-west-3.amazonaws.com/forge/podinfo:6.15.0

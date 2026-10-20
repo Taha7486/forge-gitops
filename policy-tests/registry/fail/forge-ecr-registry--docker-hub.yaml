@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-docker-hub
+  namespace: pt
+spec:
+  containers:
+  - name: app
+    image: docker.io/library/nginx:1.27-alpine

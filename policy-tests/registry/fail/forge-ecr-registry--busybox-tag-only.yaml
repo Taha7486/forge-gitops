@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-busybox-tag-only
+  namespace: pt
+spec:
+  containers:
+  - name: app
+    image: public.ecr.aws/docker/library/busybox:1.37

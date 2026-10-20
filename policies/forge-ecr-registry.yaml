@@ -1,0 +1,52 @@
+# Registry policy (control FORGE SC-4): images come only from our ECR repositories.
+# Without it, an image from any other registry (Docker Hub, GHCR) is NOT refused, because the
+# three ecr-* image policies only look at images under forge/ and skip everything else.
+# Every container must start with ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/ (note the
+# trailing slash: forgex/ does not match). ONE exact exception: the busybox of identity-demo,
+# by its pinned digest (public ECR, not Docker Hub; see workloads/identity-demo/deployment.yaml).
+# ACCOUNT_ID is a placeholder until the AWS account exists, see ecr-signature.yaml.
+# Matches Pod creation, init containers included; Deployments, StatefulSets, DaemonSets, Jobs
+# and CronJobs through autogen, so a bad Deployment fails at the ArgoCD sync. Ephemeral
+# containers are not covered (see README). Namespaces kube-system, kube-node-lease,
+# kube-public, kyverno, argocd, monitoring, policy-reporter and falco are excluded.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: forge-ecr-registry
+  annotations:
+    forge.dev/controls: "FORGE SC-4: Images come only from the allowed registry"
+    policies.kyverno.io/title: Images only from the allowed registry
+    policies.kyverno.io/category: Forge supply chain
+    policies.kyverno.io/severity: high
+spec:
+  validationActions: [Deny, Audit]
+  failurePolicy: Fail
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, kube-node-lease, kube-public, kyverno, argocd, monitoring, policy-reporter, falco]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  variables:
+    - name: containers
+      expression: >-
+        object.spec.containers + object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
+    - name: offenders
+      expression: >-
+        variables.containers.filter(c,
+          !c.image.startsWith('ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/') &&
+          c.image != 'public.ecr.aws/docker/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e').map(c, c.image)
+  validations:
+    - expression: variables.offenders.size() == 0
+      messageExpression: >-
+        'images must come from ACCOUNT_ID.dkr.ecr.eu-west-3.amazonaws.com/forge/ (FORGE SC-4), not: ' +
+        variables.offenders.join(', ')
