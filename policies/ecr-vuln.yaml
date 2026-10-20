@@ -14,6 +14,9 @@ spec:
   failurePolicy: Fail
   webhookConfiguration:
     timeoutSeconds: 30
+  # Explicit on purpose: the admitted pod gets tag@digest, so what was verified is what runs.
+  validationConfigurations:
+    mutateDigest: true
   matchConstraints:
     resourceRules:
       - apiGroups: [""]
