@@ -4,6 +4,16 @@ metadata:
   name: fail-busybox-tag-only
   namespace: pt
 spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: app
     image: public.ecr.aws/docker/library/busybox:1.37
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL

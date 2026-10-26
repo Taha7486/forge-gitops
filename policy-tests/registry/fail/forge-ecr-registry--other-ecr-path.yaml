@@ -4,6 +4,16 @@ metadata:
   name: fail-other-ecr-path
   namespace: pt
 spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: app
     image: 123456789012.dkr.ecr.eu-west-3.amazonaws.com/outside/podinfo:6.15.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL

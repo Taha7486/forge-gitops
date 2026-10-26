@@ -3,6 +3,9 @@
 # dry run, so nothing is created. Needs Kyverno. It applies ONLY this policy, with ACCOUNT_ID
 # replaced by 123456789012 (what the fixtures use), and deletes it at the end. Why separate
 # from run.sh: the fixtures there use the upstream podinfo image, which this policy refuses.
+# The fixtures carry the hardening the 17 CIS/PSS policies demand (as pass/compliant.yaml does),
+# so the result is the same with or without them; each fail fixture breaks only the registry rule.
+# Do NOT run it with the three ecr-* policies installed: they would try to verify the images.
 #   registry/pass/*.yaml                        must be accepted
 #   registry/fail/forge-ecr-registry--*.yaml    must be refused, and the message must name the policy
 set -u

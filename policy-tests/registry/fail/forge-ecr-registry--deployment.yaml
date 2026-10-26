@@ -11,6 +11,16 @@ spec:
     metadata:
       labels: {app: fail-deployment}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: app
         image: docker.io/library/nginx:1.27-alpine
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL

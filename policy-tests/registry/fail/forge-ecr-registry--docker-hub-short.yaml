@@ -4,6 +4,16 @@ metadata:
   name: fail-docker-hub-short
   namespace: pt
 spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: app
     image: nginx:1.27-alpine
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
