@@ -1,4 +1,4 @@
-# Values for the kyverno chart 3.9.1 (Kyverno v1.19.1, ADR-001 pin). ADR-002 decisions 4
+# Values for the kyverno chart 3.9.2 (Kyverno v1.19.2, pin moved from 3.9.1 / v1.19.1 on 2026-11-11, see the ADR-001 note). ADR-002 decisions 4
 # and 5 plus Addendum 1 (A1), copied from the spike's r3/tools/r3e-kyverno-values.yaml,
 # which was measured on kind. Sizes are STARTING values; the Phase 1 exit check records
 # the real usage on EKS.
